@@ -1,6 +1,5 @@
 const { autoUpdater } = require('electron-updater');
 const { app, dialog } = require('electron');
-const path = require('path');
 
 class UpdateService {
   constructor() {
@@ -14,14 +13,17 @@ class UpdateService {
   }
 
   setupAutoUpdater() {
-    // Configure update server (you'll need to set this up)
-    autoUpdater.setFeedURL({
-      provider: 'github',
-      owner: 'quan8', // Thay bằng GitHub username của bạn
-      repo: 'luugmail-desktop' // Thay bằng repo name của bạn
-    });
+    autoUpdater.autoDownload = false;
 
-    autoUpdater.checkForUpdatesAndNotify();
+    if (!app.isPackaged) {
+      autoUpdater.setFeedURL({
+        provider: 'github',
+        owner: 'QuanNguyen8902',
+        repo: 'luugmail-desktop'
+      });
+    }
+
+    autoUpdater.checkForUpdates();
 
     autoUpdater.on('checking-for-update', () => {
       console.log('Checking for update...');
@@ -110,7 +112,7 @@ class UpdateService {
   }
 
   checkForUpdates() {
-    autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.checkForUpdates();
   }
 
   downloadUpdate() {
