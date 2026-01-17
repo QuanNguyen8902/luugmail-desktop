@@ -58,8 +58,7 @@
     ],
     "win": {
       "target": "nsis",
-      "publisherName": "Your Name",
-      "sign": false
+      "publisherName": "Your Name"
     },
     "nsis": {
       "oneClick": false,
