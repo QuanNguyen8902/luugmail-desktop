@@ -17,11 +17,20 @@ function createWindow() {
     show: false
   });
 
+  const shouldOpenDevTools =
+    process.env.LUUGMAIL_DEVTOOLS === '1' ||
+    process.argv.includes('--devtools') ||
+    process.argv.includes('--open-devtools');
+
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
     mainWindow.loadURL(devServerUrl);
   } else {
     mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+  }
+
+  if (shouldOpenDevTools) {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
   mainWindow.webContents.on('did-fail-load', () => {
