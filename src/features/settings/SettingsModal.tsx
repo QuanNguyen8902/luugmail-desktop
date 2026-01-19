@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Download, Fingerprint, Trash2, Upload } from 'lucide-react';
+import type { AccountCategory, CategoryId } from '../../types';
 
 export interface SettingsModalProps {
   open: boolean;
@@ -12,6 +13,8 @@ export interface SettingsModalProps {
   resetWindowsHello: () => void;
   exportData: () => void;
   importData: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  customCategories: AccountCategory[];
+  setCustomCategories: (next: AccountCategory[]) => void;
   saveSettings: () => void;
   onClose: () => void;
 }
@@ -28,11 +31,43 @@ const SettingsModal = (props: SettingsModalProps) => {
     resetWindowsHello,
     exportData,
     importData,
+    customCategories,
+    setCustomCategories,
     saveSettings,
     onClose
   } = props;
 
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryUrl, setNewCategoryUrl] = useState('');
+
   if (!open) return null;
+
+  const toCustomId = (name: string): CategoryId => {
+    const slug = String(name || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+    return (`custom:${slug || 'custom'}`) as CategoryId;
+  };
+
+  const addCustomCategory = () => {
+    const name = String(newCategoryName || '').trim();
+    if (!name) return;
+    const id = toCustomId(name);
+    const url = String(newCategoryUrl || '').trim();
+
+    const exists = customCategories.some(c => c.id === id);
+    if (exists) return;
+
+    setCustomCategories([{ id, name, loginUrl: url || undefined }, ...customCategories]);
+    setNewCategoryName('');
+    setNewCategoryUrl('');
+  };
+
+  const deleteCustomCategory = (id: CategoryId) => {
+    setCustomCategories(customCategories.filter(c => c.id !== id));
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -128,6 +163,54 @@ const SettingsModal = (props: SettingsModalProps) => {
                 Nhập dữ liệu
                 <input type="file" accept=".json" onChange={importData} className="hidden" />
               </label>
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="font-medium mb-2">Loại tài khoản (tuỳ chỉnh)</h3>
+            <div className="space-y-2">
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                  placeholder="Ví dụ: TikTok, Twitter, Shopee..."
+                />
+                <input
+                  type="text"
+                  value={newCategoryUrl}
+                  onChange={(e) => setNewCategoryUrl(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                  placeholder="URL đăng nhập (tuỳ chọn)"
+                />
+                <button
+                  onClick={addCustomCategory}
+                  className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  Thêm loại tài khoản
+                </button>
+              </div>
+
+              {customCategories.length > 0 && (
+                <div className="space-y-2">
+                  {customCategories.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{c.name}</p>
+                        {c.loginUrl && <p className="text-xs text-gray-500 truncate">{c.loginUrl}</p>}
+                      </div>
+                      <button
+                        onClick={() => deleteCustomCategory(c.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Xóa"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -48,6 +48,7 @@ export interface PasswordsTabProps {
   copyToClipboard: (text: string, id: string) => void;
   copyAll: (username: string, password: string, twoFactorSecret: string | undefined, accountId: number) => void;
   openLink: (category: CategoryId, username: string, accountId: number) => void;
+  openChrome: (category: CategoryId, username: string, accountId: number) => void;
   openChangePassword: (category: CategoryId) => void;
   toggleFavorite: (id: number) => void;
   onEdit: (id: number) => void;
@@ -77,6 +78,7 @@ const PasswordsTab = (props: PasswordsTabProps) => {
     copyToClipboard,
     copyAll,
     openLink,
+    openChrome,
     openChangePassword,
     toggleFavorite,
     onEdit,
@@ -183,6 +185,23 @@ const PasswordsTab = (props: PasswordsTabProps) => {
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nước</label>
+              <input
+                type="text"
+                value={newAccount.country || ''}
+                onChange={(e) => setNewAccount({ ...newAccount, country: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                placeholder="VN / US / JP hoặc nhập tuỳ ý"
+                list="country-options"
+              />
+              <datalist id="country-options">
+                <option value="VN" />
+                <option value="US" />
+                <option value="JP" />
+              </datalist>
             </div>
 
             <div>
@@ -297,6 +316,7 @@ const PasswordsTab = (props: PasswordsTabProps) => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs font-medium text-gray-500 uppercase">{categoryInfo.name}</span>
+                      {account.country && <span className="text-xs text-gray-400">• {account.country}</span>}
                       {account.note && <span className="text-xs text-gray-400">• {account.note}</span>}
                       {account.isFavorite && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}
                     </div>
@@ -316,6 +336,15 @@ const PasswordsTab = (props: PasswordsTabProps) => {
                             <Copy className="w-4 h-4" />
                           )}
                         </button>
+
+                      <button
+                        onClick={() => openChrome(account.category, account.username, account.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+                        title="Mở Chrome profile riêng"
+                      >
+                        <Lock className="w-4 h-4" />
+                        Chrome
+                      </button>
                       </div>
                     </div>
 

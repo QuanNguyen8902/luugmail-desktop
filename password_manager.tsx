@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Mail, Facebook, Youtube, Send, Globe, StickyNote, Briefcase, User, Lightbulb, Wrench } from 'lucide-react';
-import type { Account, LoginHistoryItem, Note, WindowsTool } from './src/types';
+import type { Account, AccountCategory, LoginHistoryItem, Note, WindowsTool } from './src/types';
 import { totp } from './src/utils/totp';
 import {
   bufferToBase64Url,
@@ -95,6 +95,7 @@ const PasswordManager = () => {
 
   const [newAccount, setNewAccount] = useState<AccountDraft>({
     category: 'gmail',
+    country: 'VN',
     username: '',
     password: '',
     note: '',
@@ -102,6 +103,8 @@ const PasswordManager = () => {
     twoFactorSecret: '',
     createdAt: Date.now()
   });
+
+  const [customCategories, setCustomCategories] = useState<AccountCategory[]>([]);
 
   const [newNote, setNewNote] = useState<NoteDraft>({
     title: '',
@@ -112,13 +115,33 @@ const PasswordManager = () => {
     createdAt: Date.now()
   });
 
-  const categories: CategoryInfo[] = [
+  const builtinCategories: CategoryInfo[] = [
     { id: 'gmail', name: 'Gmail', icon: Mail, color: 'bg-red-500' },
     { id: 'facebook', name: 'Facebook', icon: Facebook, color: 'bg-blue-500' },
     { id: 'youtube', name: 'YouTube', icon: Youtube, color: 'bg-red-600' },
     { id: 'telegram', name: 'Telegram', icon: Send, color: 'bg-sky-500' },
     { id: 'other', name: 'Khác', icon: Globe, color: 'bg-gray-500' }
   ];
+
+  const categories: CategoryInfo[] = useMemo(() => {
+    const extra: CategoryInfo[] = customCategories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      icon: Globe,
+      color: 'bg-gray-600'
+    }));
+    return [...builtinCategories, ...extra];
+  }, [builtinCategories, customCategories]);
+
+  const normalizeAccounts = (arr: any): Account[] => {
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((a) => a && typeof a === 'object')
+      .map((a) => ({
+        ...a,
+        country: typeof a.country === 'string' && a.country.trim() ? a.country : 'VN'
+      })) as Account[];
+  };
 
   const VAULT_DEK_OS_KEY = 'vaultDekProtected';
 
@@ -243,6 +266,7 @@ const PasswordManager = () => {
     const storedBiometric = localStorage.getItem('useBiometric');
     const storedCredentialId = localStorage.getItem('webauthnCredentialId');
     const storedTools = localStorage.getItem('windowsTools');
+    const storedCustomCategories = localStorage.getItem('customCategories');
 
     const vault = readVaultFromStorage();
     const vaultLooksValid = !!vault;
@@ -278,8 +302,23 @@ const PasswordManager = () => {
     } else {
       setTools(defaultWindowsTools);
     }
+
+    if (storedCustomCategories) {
+      try {
+        const parsed = JSON.parse(storedCustomCategories);
+        if (Array.isArray(parsed)) {
+          setCustomCategories(parsed);
+        }
+      } catch {
+      }
+    }
     setIsHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    localStorage.setItem('customCategories', JSON.stringify(customCategories));
+  }, [customCategories, isHydrated]);
 
   useEffect(() => {
     const checkHello = async () => {
@@ -615,7 +654,7 @@ const PasswordManager = () => {
       localStorage.removeItem('notes');
       localStorage.removeItem('loginHistory');
 
-      setAccounts(payload.accounts);
+      setAccounts(normalizeAccounts(payload.accounts));
       setNotes(payload.notes);
       setLoginHistory(payload.loginHistory);
       setHasVault(true);
@@ -670,7 +709,7 @@ const PasswordManager = () => {
           setHelloError(res.reason);
         }
       }
-      setAccounts(Array.isArray(decrypted.accounts) ? decrypted.accounts : []);
+      setAccounts(normalizeAccounts(decrypted.accounts));
       setNotes(Array.isArray(decrypted.notes) ? decrypted.notes : []);
       setLoginHistory(nextHistory);
       setIsLocked(false);
@@ -751,7 +790,7 @@ const PasswordManager = () => {
       vaultDekBase64UrlRef.current = dekBase64Url;
       vaultPinWrappedDekRef.current = (vault as any).dek.pin;
 
-      setAccounts(Array.isArray(unlocked.payload.accounts) ? unlocked.payload.accounts : []);
+      setAccounts(normalizeAccounts(unlocked.payload.accounts));
       setNotes(Array.isArray(unlocked.payload.notes) ? unlocked.payload.notes : []);
       setLoginHistory(nextHistory);
       setIsLocked(false);
@@ -797,7 +836,7 @@ const PasswordManager = () => {
   const handleAddAccount = () => {
     if (newAccount.username && newAccount.password) {
       setAccounts([...accounts, { ...newAccount, id: Date.now(), createdAt: Date.now() }]);
-      setNewAccount({ category: 'gmail', username: '', password: '', note: '', isFavorite: false, twoFactorSecret: '', createdAt: Date.now() });
+      setNewAccount({ category: 'gmail', country: 'VN', username: '', password: '', note: '', isFavorite: false, twoFactorSecret: '', createdAt: Date.now() });
       setIsAdding(false);
       addLoginHistory(`Thêm tài khoản ${newAccount.category}`);
     }
@@ -816,6 +855,7 @@ const PasswordManager = () => {
     if (!account) return;
     setNewAccount({
       category: account.category,
+      country: account.country || 'VN',
       username: account.username,
       password: account.password,
       note: account.note || '',
@@ -833,9 +873,38 @@ const PasswordManager = () => {
     ));
     const account = accounts.find(acc => acc.id === editingId);
     addLoginHistory(`Cập nhật tài khoản ${account.category}`);
-    setNewAccount({ category: 'gmail', username: '', password: '', note: '', isFavorite: false, twoFactorSecret: '', createdAt: Date.now() });
+    setNewAccount({ category: 'gmail', country: 'VN', username: '', password: '', note: '', isFavorite: false, twoFactorSecret: '', createdAt: Date.now() });
     setIsAdding(false);
     setEditingId(null);
+  };
+
+  const openChromeForAccount = async (category, username, accountId) => {
+    navigator.clipboard.writeText(String(username || ''));
+
+    const links: Record<string, string> = {
+      gmail: `https://accounts.google.com/AccountChooser`,
+      facebook: `https://www.facebook.com/login`,
+      youtube: `https://accounts.google.com/AccountChooser`,
+      telegram: `https://web.telegram.org`
+    };
+
+    const custom = customCategories.find((c) => c.id === category);
+    if (custom?.loginUrl) {
+      links[String(category)] = custom.loginUrl;
+    }
+
+    const url = links[category] || 'about:blank';
+
+    if (!window.electronAPI?.openChromeProfile) {
+      window.open(url, '_blank');
+      return;
+    }
+    const res = await window.electronAPI.openChromeProfile(String(accountId), url);
+    if (!res?.ok) {
+      alert(res?.reason || 'Không mở được Chrome profile.');
+    } else {
+      addLoginHistory(`Mở Chrome: ${category}`);
+    }
   };
 
   const toggleFavorite = (id) => {
@@ -913,12 +982,17 @@ const PasswordManager = () => {
   const openLink = (category, username, accountId) => {
     navigator.clipboard.writeText(String(username || ''));
     
-    const links = {
+    const links: Record<string, string> = {
       gmail: `https://accounts.google.com/AccountChooser`,
       facebook: `https://www.facebook.com/login`,
       youtube: `https://accounts.google.com/AccountChooser`,
       telegram: `https://web.telegram.org`
     };
+
+    const custom = customCategories.find((c) => c.id === category);
+    if (custom?.loginUrl) {
+      links[String(category)] = custom.loginUrl;
+    }
     
     if (links[category]) {
       window.open(links[category], '_blank');
@@ -982,7 +1056,7 @@ const PasswordManager = () => {
           const text = typeof result === 'string' ? result : new TextDecoder().decode(result);
           const data = JSON.parse(text);
           if (data.accounts && Array.isArray(data.accounts)) {
-            setAccounts(data.accounts);
+            setAccounts(normalizeAccounts(data.accounts));
           }
           if (data.notes && Array.isArray(data.notes)) {
             setNotes(data.notes);
@@ -1182,6 +1256,8 @@ const PasswordManager = () => {
           resetWindowsHello={resetWindowsHello}
           exportData={exportData}
           importData={importData}
+          customCategories={customCategories}
+          setCustomCategories={setCustomCategories}
           saveSettings={saveSettings}
           onClose={() => setShowSettings(false)}
         />
@@ -1206,7 +1282,7 @@ const PasswordManager = () => {
             onCancel={() => {
               setIsAdding(false);
               setEditingId(null);
-              setNewAccount({ category: 'gmail', username: '', password: '', note: '', isFavorite: false, twoFactorSecret: '', createdAt: Date.now() });
+              setNewAccount({ category: 'gmail', country: 'VN', username: '', password: '', note: '', isFavorite: false, twoFactorSecret: '', createdAt: Date.now() });
             }}
             copiedId={copiedId}
             showPassword={showPassword}
@@ -1214,6 +1290,7 @@ const PasswordManager = () => {
             copyToClipboard={copyToClipboard}
             copyAll={copyAll}
             openLink={openLink}
+            openChrome={openChromeForAccount}
             openChangePassword={openChangePassword}
             toggleFavorite={toggleFavorite}
             onEdit={handleEditAccount}

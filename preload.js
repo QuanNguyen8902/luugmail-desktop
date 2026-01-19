@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   vaultDekEncrypt: (plaintext) => ipcRenderer.invoke('vault-dek-encrypt', plaintext),
   vaultDekDecrypt: (b64) => ipcRenderer.invoke('vault-dek-decrypt', b64),
   runWindowsTool: (target) => ipcRenderer.invoke('run-windows-tool', target),
+  openChromeProfile: (accountId, url) => ipcRenderer.invoke('open-chrome-profile', accountId, url),
   
   // Listen for update status events
   onUpdateStatus: (callback) => {

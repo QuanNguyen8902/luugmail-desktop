@@ -7,6 +7,7 @@ export interface ElectronAPI {
   vaultDekEncrypt: (plaintext: string) => Promise<{ ok: boolean; data?: string; reason?: string }>;
   vaultDekDecrypt: (b64: string) => Promise<{ ok: boolean; data?: string; reason?: string }>;
   runWindowsTool: (target: string) => Promise<{ ok: boolean; reason?: string }>;
+  openChromeProfile: (accountId: string, url: string) => Promise<{ ok: boolean; reason?: string }>;
 }
 
 declare global {

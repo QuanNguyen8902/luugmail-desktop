@@ -1,14 +1,25 @@
-export type CategoryId = 'gmail' | 'facebook' | 'youtube' | 'telegram' | 'other';
+export type BuiltinCategoryId = 'gmail' | 'facebook' | 'youtube' | 'telegram' | 'other';
+
+export type CustomCategoryId = `custom:${string}`;
+
+export type CategoryId = BuiltinCategoryId | CustomCategoryId;
 
 export interface Account {
   id: number;
   category: CategoryId;
+  country?: string;
   username: string;
   password: string;
   note?: string;
   isFavorite: boolean;
   twoFactorSecret?: string;
   createdAt: number;
+}
+
+export interface AccountCategory {
+  id: CategoryId;
+  name: string;
+  loginUrl?: string;
 }
 
 export interface TodoItem {

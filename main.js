@@ -2,6 +2,8 @@ const { app, BrowserWindow, Menu, ipcMain, safeStorage } = require('electron');
 const path = require('path');
 const UpdateService = require('./src/services/updateService');
 const { execFile } = require('child_process');
+const fs = require('fs');
+const os = require('os');
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -57,8 +59,55 @@ app.whenReady().then(() => {
     ipcMain.removeHandler('vault-dek-encrypt');
     ipcMain.removeHandler('vault-dek-decrypt');
     ipcMain.removeHandler('run-windows-tool');
+    ipcMain.removeHandler('open-chrome-profile');
   } catch (e) {
   }
+
+  ipcMain.handle('open-chrome-profile', async (_event, accountId, url) => {
+    try {
+      const id = String(accountId || '').trim();
+      if (!id) return { ok: false, reason: 'Thiếu accountId.' };
+
+      const targetUrl = String(url || '').trim() || 'about:blank';
+
+      const appName = 'LuuGMail Desktop';
+      const profileRoot = path.join(os.homedir(), 'AppData', 'Local', appName, 'chrome-profiles');
+      const userDataDir = path.join(profileRoot, id);
+
+      try {
+        fs.mkdirSync(userDataDir, { recursive: true });
+      } catch (e) {
+        return { ok: false, reason: 'Không tạo được thư mục profile Chrome.' };
+      }
+
+      const candidates = [
+        path.join(process.env['PROGRAMFILES'] || 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+        path.join(process.env['LOCALAPPDATA'] || path.join(os.homedir(), 'AppData', 'Local'), 'Google', 'Chrome', 'Application', 'chrome.exe')
+      ];
+
+      const chromePath = candidates.find((p) => {
+        try {
+          return fs.existsSync(p);
+        } catch {
+          return false;
+        }
+      });
+
+      const args = ['--user-data-dir=' + userDataDir, '--new-window', targetUrl];
+
+      if (chromePath) {
+        execFile(chromePath, args, { windowsHide: false }, () => {});
+        return { ok: true };
+      }
+
+      // Fallback: rely on PATH association
+      execFile('cmd.exe', ['/c', 'start', '', 'chrome', ...args], { windowsHide: false }, () => {});
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: String(e && e.message ? e.message : e) };
+    }
+  });
 
   ipcMain.handle('vault-dek-encrypt', (_event, plaintext) => {
     try {
