@@ -15,15 +15,11 @@ class UpdateService {
   setupAutoUpdater() {
     autoUpdater.autoDownload = false;
 
+    // In development, do not run auto-updater at all.
+    // In production, update URL is already derived from electron-builder publish config.
     if (!app.isPackaged) {
-      autoUpdater.setFeedURL({
-        provider: 'github',
-        owner: 'QuanNguyen8902',
-        repo: 'luugmail-desktop'
-      });
+      return;
     }
-
-    autoUpdater.checkForUpdates();
 
     autoUpdater.on('checking-for-update', () => {
       console.log('Checking for update...');
@@ -112,6 +108,7 @@ class UpdateService {
   }
 
   checkForUpdates() {
+    if (!app.isPackaged) return;
     autoUpdater.checkForUpdates();
   }
 
