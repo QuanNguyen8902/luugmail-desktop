@@ -1,11 +1,91 @@
-const { app, BrowserWindow, Menu, ipcMain, safeStorage } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, safeStorage, protocol } = require('electron');
 const path = require('path');
 const UpdateService = require('./src/services/updateService');
 const { execFile } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 
-function createWindow() {
+const http = require('http');
+
+let staticServer = null;
+let lastStartUrl = null;
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      allowServiceWorkers: true
+    }
+
+  }
+]);
+
+const startStaticServer = () => {
+  return new Promise((resolve, reject) => {
+    try {
+      const distDir = path.join(__dirname, 'dist');
+
+      const server = http.createServer((req, res) => {
+        try {
+          const rawUrl = String(req.url || '/');
+          const urlPath = rawUrl.split('?')[0].split('#')[0];
+          const safePath = decodeURIComponent(urlPath).replace(/^\/+/, '');
+          const requested = safePath || 'index.html';
+          const filePath = path.normalize(path.join(distDir, requested));
+
+          if (!filePath.startsWith(distDir)) {
+            res.writeHead(403);
+            res.end('Forbidden');
+            return;
+          }
+
+          const exists = fs.existsSync(filePath);
+          const finalPath = exists ? filePath : path.join(distDir, 'index.html');
+          const ext = path.extname(finalPath).toLowerCase();
+          const mimeByExt = {
+            '.html': 'text/html; charset=utf-8',
+            '.js': 'text/javascript; charset=utf-8',
+            '.css': 'text/css; charset=utf-8',
+            '.json': 'application/json; charset=utf-8',
+            '.svg': 'image/svg+xml',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.webp': 'image/webp',
+            '.ico': 'image/x-icon',
+            '.txt': 'text/plain; charset=utf-8'
+          };
+          const contentType = mimeByExt[ext] || 'application/octet-stream';
+
+          const buf = fs.readFileSync(finalPath);
+          res.writeHead(200, { 'Content-Type': contentType });
+          res.end(buf);
+        } catch {
+          res.writeHead(500);
+          res.end('Internal Server Error');
+        }
+      });
+
+      server.listen(0, '127.0.0.1', () => {
+        const addr = server.address();
+        const port = typeof addr === 'object' && addr ? addr.port : 0;
+        staticServer = server;
+        console.log(`[luugmail] static server: http://localhost:${port}/index.html`);
+        resolve({ server, port });
+      });
+      server.on('error', (err) => reject(err));
+    } catch (e) {
+      reject(e);
+    }
+  });
+};
+
+function createWindow(startUrl) {
+  lastStartUrl = startUrl || lastStartUrl;
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -28,7 +108,7 @@ function createWindow() {
   if (devServerUrl) {
     mainWindow.loadURL(devServerUrl);
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    mainWindow.loadURL(lastStartUrl);
   }
 
   if (shouldOpenDevTools) {
@@ -52,6 +132,18 @@ function createWindow() {
 
 // When Electron has finished initialization
 app.whenReady().then(() => {
+  protocol.registerFileProtocol('app', (request, callback) => {
+    try {
+      const url = request.url.replace(/^app:\/\//, '');
+      const decodedPath = decodeURIComponent(url);
+      const relative = decodedPath.replace(/^\.\//, '');
+      const resolvedPath = path.normalize(path.join(__dirname, 'dist', relative));
+      callback({ path: resolvedPath });
+    } catch (e) {
+      callback({ path: path.join(__dirname, 'dist', 'index.html') });
+    }
+  });
+
   // Initialize update service
   const updateService = new UpdateService();
   // In dev, Electron can reload; avoid "Attempted to register a second handler".
@@ -152,7 +244,21 @@ app.whenReady().then(() => {
     }
   });
 
-  createWindow();
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+  if (devServerUrl) {
+    createWindow(devServerUrl);
+  } else {
+    startStaticServer()
+      .then(({ port }) => {
+        const url = `http://localhost:${port}/index.html`;
+        console.log(`[luugmail] renderer url: ${url}`);
+        createWindow(url);
+      })
+      .catch(() => {
+        console.log('[luugmail] static server failed, fallback to app://');
+        createWindow('app://./index.html');
+      });
+  }
   
   // Set the main window for update service
   const mainWindow = BrowserWindow.getAllWindows()[0];
@@ -181,7 +287,7 @@ app.whenReady().then(() => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      createWindow(lastStartUrl || process.env.VITE_DEV_SERVER_URL || 'app://./index.html');
     }
   });
 });
@@ -189,6 +295,9 @@ app.whenReady().then(() => {
 // Quit when all windows are closed
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    try {
+      staticServer?.close?.();
+    } catch (e) {}
     app.quit();
   }
 });

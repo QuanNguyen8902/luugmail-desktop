@@ -1,6 +1,6 @@
 {
   "name": "luugmail-desktop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Desktop Password Manager App",
   "main": "main.js",
   "scripts": {

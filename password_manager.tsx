@@ -334,6 +334,10 @@ const PasswordManager = () => {
   }, []);
 
   const setupWindowsHello = async () => {
+    if (typeof window !== 'undefined' && typeof window.isSecureContext === 'boolean' && !window.isSecureContext) {
+      alert('Không thể thiết lập Windows Hello vì ứng dụng đang chạy trong môi trường không an toàn (không phải secure context).\n\nHãy chạy bản Desktop (Electron) hoặc chạy dev qua http://localhost.');
+      return;
+    }
     if (!window.PublicKeyCredential || !navigator.credentials) {
       alert('Thiết bị/trình duyệt không hỗ trợ Windows Hello (WebAuthn)!');
       return;
@@ -349,9 +353,13 @@ const PasswordManager = () => {
       const challenge = crypto.getRandomValues(new Uint8Array(32));
       const userId = crypto.getRandomValues(new Uint8Array(16));
 
+      const rpId = typeof window !== 'undefined' && window.location?.hostname
+        ? String(window.location.hostname)
+        : undefined;
+
       const credential = await navigator.credentials.create({
         publicKey: {
-          rp: { name: 'LuuGmail Desktop' },
+          rp: { name: 'LuuGmail Desktop', id: rpId },
           user: { id: userId, name: 'local-user', displayName: 'Local User' },
           pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
           authenticatorSelection: {
@@ -384,9 +392,40 @@ const PasswordManager = () => {
 
       addLoginHistory('Thiết lập Windows Hello');
       alert('Thiết lập Windows Hello thành công!');
-    } catch (error) {
-      alert('Thiết lập Windows Hello thất bại!');
+    } catch (error: any) {
+      const name = String(error?.name || '');
+      const message = String(error?.message || error || '');
+      if (name === 'NotAllowedError') {
+        alert('Thiết lập Windows Hello bị hủy hoặc bị từ chối.\n\nHãy thử lại và xác nhận vân tay/Face/PIN trên Windows Hello.');
+        return;
+      }
+      if (name === 'NotSupportedError') {
+        alert('Thiết bị/trình duyệt không hỗ trợ Windows Hello (WebAuthn).');
+        return;
+      }
+      if (name === 'SecurityError') {
+        alert('Thiết lập Windows Hello bị chặn vì lý do bảo mật (SecurityError).\n\nThường do app chạy trong môi trường không an toàn.');
+        return;
+      }
+      alert(`Thiết lập Windows Hello thất bại!\n\n${name ? `Mã lỗi: ${name}\n` : ''}${message ? `Chi tiết: ${message}` : ''}`);
     }
+  };
+
+  const deleteSelectedCategory = () => {
+    if (filterCategory === 'all') return;
+    const target = String(filterCategory);
+    const isCustom = target.startsWith('custom:');
+    if (!isCustom) return;
+
+    const custom = customCategories.find((c) => c.id === target);
+    const label = custom?.name || target;
+    const ok = window.confirm(`Bạn có muốn xóa loại tài khoản: ${label}?`);
+    if (!ok) return;
+
+    setCustomCategories(customCategories.filter((c) => c.id !== target));
+    setAccounts((prev) => prev.map((a) => (a.category === target ? { ...a, category: 'other' } : a)));
+    setFilterCategory('all');
+    addLoginHistory(`Xóa loại tài khoản: ${label}`);
   };
 
   const titleCase = (s) => {
@@ -573,6 +612,16 @@ const PasswordManager = () => {
       window.removeEventListener('keydown', updateActivity);
     };
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' && e.shiftKey) {
+        deleteSelectedCategory();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [filterCategory, customCategories]);
 
   const handleUnlock = async () => {
     if (pin.length < 6) {
