@@ -52,6 +52,7 @@ const PasswordManager = () => {
   const vaultMetaRef = useRef(null);
   const vaultDekBase64UrlRef = useRef<string | null>(null);
   const vaultPinWrappedDekRef = useRef<any>(null);
+  const isLockingRef = useRef(false);
   const otpBySecretRef = useRef<Record<string, string>>({});
   const [isLocked, setIsLocked] = useState(true);
   const [pin, setPin] = useState('');
@@ -562,6 +563,7 @@ const PasswordManager = () => {
   useEffect(() => {
     if (!isHydrated) return;
     if (isLocked) return;
+    if (isLockingRef.current) return;
     if (!vaultKeyRef.current || !vaultMetaRef.current) return;
     if (!vaultPinWrappedDekRef.current) return;
 
@@ -708,6 +710,7 @@ const PasswordManager = () => {
       setLoginHistory(payload.loginHistory);
       setHasVault(true);
       setHasLegacyData(false);
+      isLockingRef.current = false;
       setIsLocked(false);
       setPin('');
       setAuthError('');
@@ -761,6 +764,7 @@ const PasswordManager = () => {
       setAccounts(normalizeAccounts(decrypted.accounts));
       setNotes(Array.isArray(decrypted.notes) ? decrypted.notes : []);
       setLoginHistory(nextHistory);
+      isLockingRef.current = false;
       setIsLocked(false);
       setPin('');
       setAuthError('');
@@ -842,6 +846,7 @@ const PasswordManager = () => {
       setAccounts(normalizeAccounts(unlocked.payload.accounts));
       setNotes(Array.isArray(unlocked.payload.notes) ? unlocked.payload.notes : []);
       setLoginHistory(nextHistory);
+      isLockingRef.current = false;
       setIsLocked(false);
       setPin('');
       setAuthError('');
@@ -855,6 +860,7 @@ const PasswordManager = () => {
   };
 
   const handleLock = () => {
+    isLockingRef.current = true;
     setIsLocked(true);
     setPin('');
     setAuthError('');
@@ -871,6 +877,9 @@ const PasswordManager = () => {
     setEditingNoteId(null);
     setShowSettings(false);
     setShowHistory(false);
+    setTimeout(() => {
+      isLockingRef.current = false;
+    }, 0);
   };
 
   const addLoginHistory = (action) => {
